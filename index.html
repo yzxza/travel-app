@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>飞行家 · AI 旅行规划</title>
+<meta name="description" content="输入目的地，一键生成机票省钱策略、每日行程、预算与住宿建议。">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<style>
+  :root{
+    --bg:#eef2f9; --card:#ffffff; --ink:#111827; --muted:#6b7280;
+    --brand:#2563eb; --brand2:#7c3aed; --brand-d:#1d4ed8; --line:#e5e7eb;
+    --ok:#059669; --soft:#f3f6fc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65;}
+  a{color:var(--brand)}
+  .hero{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;
+    padding:46px 16px 64px;text-align:center;position:relative;overflow:hidden}
+  .hero h1{font-size:30px;margin:0 0 8px;font-weight:800;letter-spacing:.5px}
+  .hero p{margin:0;opacity:.92;font-size:15px}
+  .hero .plane{font-size:34px;display:block;margin-bottom:6px}
+  .wrap{max-width:860px;margin:-40px auto 80px;padding:0 16px;position:relative;z-index:2}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:24px;box-shadow:0 10px 30px rgba(30,41,90,.08);}
+  .card + .card{margin-top:20px}
+  .card h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .card .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid .full{grid-column:1 / -1}
+  label{display:block;font-size:13px;font-weight:600;color:#374151;margin:0 0 6px}
+  input,textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:11px;
+    font-size:14px;font-family:inherit;background:#fff;color:var(--ink);transition:.15s}
+  textarea{resize:vertical;min-height:70px}
+  input:focus,textarea:focus{outline:none;border-color:var(--brand);
+    box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{border:1px solid var(--line);background:var(--soft);color:#374151;border-radius:20px;
+    padding:5px 12px;font-size:12.5px;cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--brand);color:var(--brand);background:#eef4ff}
+  .go{margin-top:22px;width:100%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;
+    border:0;padding:15px;border-radius:13px;font-size:16px;font-weight:700;cursor:pointer;
+    box-shadow:0 6px 16px rgba(37,99,235,.28);transition:.15s}
+  .go:hover{filter:brightness(1.05)}
+  .go:disabled{opacity:.6;cursor:not-allowed;box-shadow:none}
+  #status{text-align:center;font-size:13px;color:var(--muted);margin-top:12px;min-height:18px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;
+    border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #resultCard{display:none}
+  .rhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .rhead .acts{display:flex;gap:8px}
+  .btn-sm{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 12px;
+    font-size:13px;cursor:pointer;color:#374151}
+  .btn-sm:hover{border-color:var(--brand);color:var(--brand)}
+  #out h2{font-size:19px;color:var(--brand-d);border-bottom:2px solid #eef2f9;padding-bottom:6px;margin-top:26px}
+  #out h3{font-size:16px;margin-top:18px}
+  #out table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  #out th,#out td{border:1px solid var(--line);padding:9px 11px;text-align:left}
+  #out th{background:#f3f6fc}
+  #out code{background:#f3f6fc;padding:1px 5px;border-radius:4px}
+  #out ul{padding-left:20px}
+  .note{background:#fffbeb;border:1px solid #fde68a;color:#92600a;border-radius:11px;
+    padding:11px 14px;font-size:12.5px;margin-top:16px}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 40px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}.hero h1{font-size:24px}}
+  @media print{.hero,#formCard,footer,.rhead .acts{display:none}.wrap{margin:0}.card{box-shadow:none;border:none}}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <span class="plane">✈️</span>
+    <h1>飞行家 · AI 旅行规划</h1>
+    <p>填一填目的地，几十秒生成机票省钱策略、每日行程、预算和住宿建议</p>
+  </div>
+
+  <div class="wrap">
+    <!-- 表单 -->
+    <div class="card" id="formCard">
+      <h2>🧭 告诉我你的行程</h2>
+      <p class="sub">除了目的地，其它都可以留空，AI 会帮你补全参考方案。</p>
+      <div class="grid">
+        <div>
+          <label>出发城市</label>
+          <input id="origin" placeholder="如：上海">
+        </div>
+        <div>
+          <label>目的地 <span style="color:#dc2626">*</span></label>
+          <input id="dest" placeholder="如：日本东京 / 关西地区">
+        </div>
+        <div>
+          <label>出发日期</label>
+          <input id="date" placeholder="如：2026年10月中旬">
+        </div>
+        <div>
+          <label>出行天数</label>
+          <input id="days" type="number" min="1" placeholder="如：7">
+        </div>
+        <div>
+          <label>出行人数</label>
+          <input id="people" placeholder="如：2大人1小孩">
+        </div>
+        <div>
+          <label>总预算（元）</label>
+          <input id="budget" placeholder="如：15000（可留空）">
+        </div>
+        <div class="full">
+          <label>出行偏好 / 特殊需求</label>
+          <textarea id="prefs" placeholder="如：喜欢自然风光和美食，不想太赶，带老人走路少，想泡温泉……"></textarea>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+      <button class="go" id="gen">✨ 生成我的专属方案</button>
+      <div id="status"></div>
+    </div>
+
+    <!-- 结果 -->
+    <div class="card" id="resultCard">
+      <div class="rhead">
+        <h2 style="margin:0">📋 你的旅行方案</h2>
+        <div class="acts">
+          <button class="btn-sm" id="copyBtn">复制</button>
+          <button class="btn-sm" id="printBtn">打印/存PDF</button>
+        </div>
+      </div>
+      <div id="out"></div>
+      <div class="note">机票价格为 AI 估算区间，非实时报价。下单前请到携程 / 飞猪 / Google Flights / Skyscanner 核对当前价格。</div>
+    </div>
+  </div>
+
+  <footer>飞行家 · 仅供出行参考 · Powered by AI</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const PRESETS = ['亲子出游','情侣蜜月','美食为主','自然风光','轻松不赶','摄影打卡','带老人','预算优先'];
+const chips = $('chips');
+PRESETS.forEach(t=>{
+  const b=document.createElement('span'); b.className='chip'; b.textContent=t;
+  b.onclick=()=>{ const p=$('prefs'); p.value = p.value ? (p.value.replace(/[，,\s]*$/,'')+'，'+t) : t; };
+  chips.appendChild(b);
+});
+
+async function generate(){
+  if(!$('dest').value.trim()){ $('dest').focus(); alert('请至少填写目的地'); return; }
+  const payload = {
+    origin:$('origin').value, dest:$('dest').value, date:$('date').value,
+    days:$('days').value, people:$('people').value, budget:$('budget').value, prefs:$('prefs').value
+  };
+  $('gen').disabled=true;
+  $('status').innerHTML='<span class="spin"></span>AI 正在规划中，请稍候…';
+  $('resultCard').style.display='block';
+  $('out').innerHTML='';
+  $('resultCard').scrollIntoView({behavior:'smooth',block:'start'});
+
+  let md='';
+  try{
+    const resp=await fetch('/api/chat',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!resp.ok||!resp.body){
+      let msg='请求失败';
+      try{ msg=(await resp.json()).error||msg; }catch(e){}
+      throw new Error(msg);
+    }
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n'); buf=lines.pop();
+      for(const line of lines){
+        const s=line.trim();
+        if(!s.startsWith('data:')) continue;
+        const data=s.slice(5).trim();
+        if(data==='[DONE]') continue;
+        try{ const j=JSON.parse(data); const dpart=j.choices?.[0]?.delta?.content||'';
+          if(dpart){ md+=dpart; $('out').innerHTML=marked.parse(md); }
+        }catch(e){}
+      }
+    }
+    $('status').textContent = md ? '✅ 方案已生成，祝旅途愉快！' : '';
+    if(!md){ $('out').innerHTML='<div class="note">没有收到内容，请稍后重试。</div>'; }
+  }catch(err){
+    $('status').textContent='';
+    $('out').innerHTML='<div class="note" style="background:#fef2f2;border-color:#fecaca;color:#b91c1c">出错了：'
+      +String(err.message).replace(/</g,'&lt;')+'</div>';
+  }finally{ $('gen').disabled=false; }
+}
+
+$('gen').addEventListener('click',generate);
+$('copyBtn').addEventListener('click',()=>{
+  navigator.clipboard.writeText($('out').innerText).then(()=>{ $('copyBtn').textContent='已复制'; setTimeout(()=>$('copyBtn').textContent='复制',1500); });
+});
+$('printBtn').addEventListener('click',()=>window.print());
+</script>
+</body>
+</html>
