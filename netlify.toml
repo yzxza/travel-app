@@ -1,0 +1,7 @@
+# Netlify 站点配置
+[build]
+  publish = "."                      # 网站根目录（index.html 就在这里）
+  functions = "netlify/functions"    # 中转函数所在目录
+
+# 函数已用 export const config = { path: "/api/chat" } 指定了访问路径，
+# 因此前端调用 /api/chat 即可，无需额外 redirect。
