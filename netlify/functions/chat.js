@@ -5,6 +5,7 @@
 //   MODEL                （选填）默认 deepseek-ai/DeepSeek-V3
 //   BASE_URL             （选填）默认 https://api.siliconflow.cn/v1
 //   ALLOWED_ORIGIN       （选填）只允许你自己的网址调用，如 https://your-site.netlify.app
+//   MAX_TOKENS           （选填）单次输出上限，默认 8192
 
 export const config = { path: "/api/chat" };
 
@@ -14,7 +15,7 @@ const SYSTEM_PROMPT = `你是一位资深的旅行规划师和机票优惠专家
 - 推荐的航线方案（直飞 vs 中转，列出常见中转城市及其省钱幅度）
 - 最佳购买提前量、值得关注的航司/廉航
 - 淡旺季与星期几出发的价格差异提示
-- 给出往返机票的**大致价格区间**（人民币），并明确标注这是估算、需到比价网站核实
+- 给出往返机票的大致价格区间（人民币），并明确标注这是估算、需到比价网站核实
 - 3-5 条实用省钱技巧（灵活日期、分段购票、里程、错峰等）
 
 ## 二、每日行程路线
@@ -30,7 +31,7 @@ const SYSTEM_PROMPT = `你是一位资深的旅行规划师和机票优惠专家
 - 推荐 2-3 个适合入住的区域及理由
 - 签证、货币、网络、天气、语言、注意事项等实用信息
 
-要求：内容具体到可直接执行，避免空话套话。价格用人民币。只回答旅行规划相关内容，若用户信息与旅行无关则礼貌说明本工具仅用于旅行规划。`;
+要求：内容具体到可直接执行，避免空话套话，价格用人民币。务必把四个板块全部写完整，控制篇幅、每部分精炼扼要，宁可简短也不要写到一半被截断。只回答旅行规划相关内容，若用户信息与旅行无关则礼貌说明本工具仅用于旅行规划。`;
 
 function buildUserPrompt(d) {
   const s = v => (v == null ? '' : String(v)).slice(0, 200);
@@ -44,11 +45,10 @@ function buildUserPrompt(d) {
 - 偏好与需求：${s(d.prefs) || '无特别要求'}`;
 }
 
-// —— 极简内存限流（尽力而为；真正的防线是硅基账户余额上限）——
+// 极简内存限流（尽力而为；真正的防线是硅基账户余额上限）
 const hits = new Map();
 function rateLimited(ip) {
-  const now = Date.now();
-  const WINDOW = 60 * 1000, MAX = 5;
+  const now = Date.now(), WINDOW = 60 * 1000, MAX = 5;
   const rec = hits.get(ip) || { t: now, n: 0 };
   if (now - rec.t > WINDOW) { rec.t = now; rec.n = 0; }
   rec.n++; hits.set(ip, rec);
@@ -64,8 +64,8 @@ export default async (req, context) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type'
   };
-  const json = (obj, status = 200) =>
-    new Response(JSON.stringify(obj), { status, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' } });
+  const json = (obj, status) =>
+    new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({}, cors, { 'Content-Type': 'application/json; charset=utf-8' }) });
 
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return json({ error: '只支持 POST' }, 405);
@@ -79,9 +79,10 @@ export default async (req, context) => {
   if (!API_KEY) return json({ error: '服务器未配置 API Key（请在 Netlify 环境变量里设置 SILICONFLOW_API_KEY）' }, 500);
   const BASE_URL = (process.env.BASE_URL || 'https://api.siliconflow.cn/v1').replace(/\/$/, '');
   const MODEL = process.env.MODEL || 'deepseek-ai/DeepSeek-V3';
+  const MAX_TOKENS = parseInt(process.env.MAX_TOKENS, 10) || 8192;
 
   let d;
-  try { d = await req.json(); } catch { d = {}; }
+  try { d = await req.json(); } catch (e) { d = {}; }
   d = d || {};
   if (!d.dest) return json({ error: '请至少填写目的地' }, 400);
 
@@ -93,7 +94,7 @@ export default async (req, context) => {
         model: MODEL,
         stream: true,
         temperature: 0.7,
-        max_tokens: 4096,
+        max_tokens: MAX_TOKENS,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserPrompt(d) }
@@ -106,12 +107,11 @@ export default async (req, context) => {
       return json({ error: '上游接口出错：' + t.slice(0, 300) }, upstream.status || 502);
     }
 
-    // 直接把上游 SSE 流转发给前端
     return new Response(upstream.body, {
       status: 200,
-      headers: { ...cors, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' }
+      headers: Object.assign({}, cors, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' })
     });
   } catch (err) {
-    return json({ error: '服务器错误：' + String(err && err.message || err) }, 500);
+    return json({ error: '服务器错误：' + String((err && err.message) || err) }, 500);
   }
 };
